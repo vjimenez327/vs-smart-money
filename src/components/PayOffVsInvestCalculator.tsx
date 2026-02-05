@@ -5,6 +5,7 @@ interface Inputs {
   mortgageBalance: number;
   mortgageRate: number;
   monthlyPayment: number;
+  escrowAmount: number; 
   extraPayment: number;
   investmentReturn: number;
   taxBracket: number;
@@ -16,6 +17,7 @@ export default function PayOffVsInvestCalculator() {
     mortgageBalance: 280000,
     mortgageRate: 6.5,
     monthlyPayment: 1896,
+    escrowAmount: 300, 
     extraPayment: 200,
     investmentReturn: 9,
     taxBracket: 24,
@@ -31,96 +33,118 @@ export default function PayOffVsInvestCalculator() {
   };
 
   const calculateScenarios = () => {
-    const monthlyRate = inputs.mortgageRate / 100 / 12;
-    const monthlyInvestmentRate = inputs.investmentReturn / 100 / 12;
-    const totalMonths = inputs.yearsToCompare * 12;
+  const monthlyRate = inputs.mortgageRate / 100 / 12;
+  const monthlyInvestmentRate = inputs.investmentReturn / 100 / 12;
+  const totalMonths = inputs.yearsToCompare * 12;
 
-    // Scenario 1: Pay extra on mortgage
-    let mortgageBalance = inputs.mortgageBalance;
-    let totalInterestPaid = 0;
-    let monthsPaidOff = 0;
-    let month = 0;
+  // Scenario 1: Pay extra on mortgage
+  let mortgageBalance = inputs.mortgageBalance || 0;
+  let totalInterestPaid = 0;
+  let monthsPaidOff = 0;
+  let month = 0;
+  const basePrincipalAndInterest = (inputs.monthlyPayment || 0) - (inputs.escrowAmount || 0);
 
-    while (mortgageBalance > 0 && month < totalMonths) {
-      const interest = mortgageBalance * monthlyRate;
-      const principal = inputs.monthlyPayment + inputs.extraPayment - interest;
-      totalInterestPaid += interest;
-      mortgageBalance -= principal;
-      month++;
-      
-      if (mortgageBalance <= 0) {
-        monthsPaidOff = month;
-        mortgageBalance = 0;
-        break;
-      }
-    }
-
-    // After mortgage is paid off, invest everything
-    let investmentAfterPayoff = 0;
-    if (monthsPaidOff > 0 && monthsPaidOff < totalMonths) {
-      const monthsRemaining = totalMonths - monthsPaidOff;
-      const monthlyInvestAmount = inputs.monthlyPayment + inputs.extraPayment;
-      
-      for (let i = 0; i < monthsRemaining; i++) {
-        investmentAfterPayoff = (investmentAfterPayoff + monthlyInvestAmount) * (1 + monthlyInvestmentRate);
-      }
-    }
-
-    const payOffScenario = {
-      interestPaid: totalInterestPaid,
-      monthsPaidOff: monthsPaidOff || totalMonths,
-      yearsPaidOff: monthsPaidOff ? monthsPaidOff / 12 : inputs.yearsToCompare,
-      remainingBalance: mortgageBalance,
-      investmentValue: investmentAfterPayoff,
-      netWorth: investmentAfterPayoff - mortgageBalance
+  // Safety check
+  if (basePrincipalAndInterest <= 0) {
+    return {
+      payOff: { interestPaid: 0, monthsPaidOff: 0, yearsPaidOff: 0, remainingBalance: mortgageBalance, investmentValue: 0, netWorth: -mortgageBalance },
+      invest: { interestPaid: 0, remainingMortgage: mortgageBalance, investmentValue: 0, netWorth: -mortgageBalance },
+      comparison: { netDifference: 0, betterChoice: 'payoff', mortgageInterestDeduction: 0, guaranteedReturn: inputs.mortgageRate, expectedReturn: inputs.investmentReturn }
     };
+  }
 
-    // Scenario 2: Invest the extra payment, make regular mortgage payments
-    let investBalance = inputs.mortgageBalance;
-    let investInterestPaid = 0;
-    let investmentValue = 0;
+  while (mortgageBalance > 0 && month < totalMonths) {
+    const interest = mortgageBalance * monthlyRate;
+    const principal = basePrincipalAndInterest + (inputs.extraPayment || 0) - interest;
+    
+    if (principal <= 0) {
+      break;
+    }
+    
+    totalInterestPaid += interest;
+    mortgageBalance -= principal;
+    month++;
+    
+    if (mortgageBalance <= 0) {
+      monthsPaidOff = month;
+      mortgageBalance = 0;
+      break;
+    }
+  }
 
-    for (let i = 0; i < totalMonths; i++) {
-      // Mortgage payment
-      if (investBalance > 0) {
-        const interest = investBalance * monthlyRate;
-        const principal = inputs.monthlyPayment - interest;
+  // After mortgage is paid off, invest everything
+  let investmentAfterPayoff = 0;
+  if (monthsPaidOff > 0 && monthsPaidOff < totalMonths) {
+    const monthsRemaining = totalMonths - monthsPaidOff;
+    const monthlyInvestAmount = (inputs.monthlyPayment || 0) + (inputs.extraPayment || 0);
+    
+    for (let i = 0; i < monthsRemaining; i++) {
+      investmentAfterPayoff = (investmentAfterPayoff + monthlyInvestAmount) * (1 + monthlyInvestmentRate);
+    }
+  }
+
+  const payOffScenario = {
+    interestPaid: totalInterestPaid,
+    monthsPaidOff: monthsPaidOff || totalMonths,
+    yearsPaidOff: monthsPaidOff ? monthsPaidOff / 12 : inputs.yearsToCompare,
+    remainingBalance: mortgageBalance,
+    investmentValue: investmentAfterPayoff,
+    netWorth: investmentAfterPayoff - mortgageBalance
+  };
+
+  // Scenario 2: Invest the extra payment, make regular mortgage payments
+  let investBalance = inputs.mortgageBalance || 0;
+  let investInterestPaid = 0;
+  let investmentValue = 0;
+
+  for (let i = 0; i < totalMonths; i++) {
+    // Mortgage payment (regular, no extra)
+    if (investBalance > 0) {
+      const interest = investBalance * monthlyRate;
+      const principal = basePrincipalAndInterest - interest;
+      
+      if (principal > 0) {
         investInterestPaid += interest;
         investBalance -= principal;
         
         if (investBalance < 0) investBalance = 0;
       }
-      
-      // Investment growth
-      investmentValue = (investmentValue + inputs.extraPayment) * (1 + monthlyInvestmentRate);
     }
+    
+    // Investment growth (only the extra amount)
+    investmentValue = (investmentValue + (inputs.extraPayment || 0)) * (1 + monthlyInvestmentRate);
+  }
 
-    const investScenario = {
-      interestPaid: investInterestPaid,
-      remainingMortgage: investBalance,
-      investmentValue: investmentValue,
-      netWorth: investmentValue - investBalance
-    };
-
-    // Calculate tax benefits
-    const mortgageInterestDeduction = (totalInterestPaid - investInterestPaid) * (inputs.taxBracket / 100);
-
-    const netDifference = investScenario.netWorth - payOffScenario.netWorth + mortgageInterestDeduction;
-    const betterChoice = netDifference > 0 ? 'invest' : 'payoff';
-
-    return {
-      payOff: payOffScenario,
-      invest: investScenario,
-      comparison: {
-        netDifference: Math.abs(netDifference),
-        betterChoice,
-        mortgageInterestDeduction,
-        guaranteedReturn: inputs.mortgageRate,
-        expectedReturn: inputs.investmentReturn
-      }
-    };
+  const investScenario = {
+    interestPaid: investInterestPaid,
+    remainingMortgage: investBalance,
+    investmentValue: investmentValue,
+    netWorth: investmentValue - investBalance
   };
 
+  // Calculate tax benefits - investing pays more interest, so gets more deduction
+  const interestDifferential = investInterestPaid - totalInterestPaid;
+  const mortgageInterestDeduction = Math.max(0, interestDifferential * ((inputs.taxBracket || 0) / 100));
+
+  // Adjust invest scenario with tax benefit
+  const adjustedInvestNetWorth = investScenario.netWorth + mortgageInterestDeduction;
+  
+  const netDifference = adjustedInvestNetWorth - payOffScenario.netWorth;
+  const betterChoice = netDifference > 0 ? 'invest' : 'payoff';
+
+  return {
+    payOff: payOffScenario,
+    invest: investScenario,
+    comparison: {
+      netDifference: Math.abs(netDifference),
+      betterChoice,
+      mortgageInterestDeduction,
+      guaranteedReturn: inputs.mortgageRate || 0,
+      expectedReturn: inputs.investmentReturn || 0
+    }
+  };
+};
+  
   const results = calculateScenarios();
 
   return (
@@ -135,14 +159,15 @@ export default function PayOffVsInvestCalculator() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Mortgage Balance ($)
+                Monthly Escrow Amount ($)
               </label>
               <input
                 type="number"
-                value={inputs.mortgageBalance}
-                onChange={(e) => setInputs({...inputs, mortgageBalance: Number(e.target.value)})}
+                value={inputs.escrowAmount}
+                onChange={(e) => setInputs({...inputs, escrowAmount: Number(e.target.value)})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               />
+              <p className="text-xs text-gray-500 mt-1">For property taxes & insurance</p>
             </div>
 
             <div>
@@ -397,7 +422,7 @@ export default function PayOffVsInvestCalculator() {
                   • After {inputs.yearsToCompare} years, you'll have <strong>{formatCurrency(results.comparison.netDifference)}</strong> more by paying off your mortgage early.
                 </p>
                 <p>
-                  • Your mortgage rate ({inputs.mortgageRate}%) is higher than your expected investment return ({inputs.investmentReturn}%), making early payoff more profitable.
+                  • Your mortgage rate ({inputs.mortgageRate}%) is close to or higher than your expected investment return ({inputs.investmentReturn}%), making early payoff more profitable.
                 </p>
                 <p>
                   • Plus, you'll own your home in {results.payOff.yearsPaidOff.toFixed(1)} years and have no mortgage payment!
