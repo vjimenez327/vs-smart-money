@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Sparkles, TrendingUp, Home, Scale } from 'lucide-react';
+import { Sparkles, TrendingUp, Home, Scale, Info } from 'lucide-react';
 import RoboAdvisorCalculator from './components/RoboAdvisorCalculator';
 import MortgageCalculator from './components/MortgageCalculator';
 import PayOffVsInvestCalculator from './components/PayOffVsInvestCalculator';
+import About from './components/About';
 
-type Tab = 'robo' | 'mortgage' | 'payoff-invest';
+type Tab = 'robo' | 'mortgage' | 'payoff-invest' | 'about';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('robo');
+  const [activeTab, setActiveTab] = useState<Tab>('about');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
@@ -22,6 +23,19 @@ export default function App() {
 
         {/* Tab Navigation */}
         <div className="flex gap-4 mb-6">
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
+              activeTab === 'about'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <Info className="w-5 h-5" />
+              <span className="hidden sm:inline">About</span>
+            </div>
+          </button>
           <button
             onClick={() => setActiveTab('robo')}
             className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all ${
@@ -64,6 +78,7 @@ export default function App() {
         </div>
 
         {/* Tab Content */}
+        {activeTab === 'about' && <About />}
         {activeTab === 'robo' && <RoboAdvisorCalculator />}
         {activeTab === 'mortgage' && <MortgageCalculator />}
         {activeTab === 'payoff-invest' && <PayOffVsInvestCalculator />}
